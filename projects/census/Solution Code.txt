@@ -1,0 +1,191 @@
+SELECT * FROM census_project.data1;
+SELECT * FROM census_project.data2;
+
+-- Number of Rows in each Table--
+SELECT count(*) FROM census_project.data1;
+SELECT count(*) FROM census_project.data2;
+
+-- Data set for Karnataka and Maharastra --
+SELECT *
+FROM census_project.data1
+WHERE State IN ('Karnataka', 'Maharastra');
+
+-- state starting with letter A  and ending with H --
+ SELECT State 
+ FROM census_project.data1
+ WHERE State LIKE 'A%H'
+ GROUP BY State;
+
+-- Population of India --
+SELECT State, SUM(Population) AS 'Population of India'
+FROM census_project.data2
+GROUP BY State;
+
+-- Avg Growth Rate --
+SELECT State
+, round( AVG (data1.Growth)*100, 2) AS 'Averg_Growth'
+From census_project.data1
+Group BY State
+ORDER BY  Averg_Growth DESC;
+
+-- Avg Sex Ratio --
+SELECT State
+, ROUND(AVG (Sex_Ratio),2) AS Sex_Growth
+FROM census_project.data1
+GROUP BY State
+ORDER BY Sex_Growth desc;
+
+-- Avg Literacy Rate 
+SELECT State
+, ROUND(AVG(Literacy),2) AS AVG_Literacy
+FROM census_project.data1
+Group By State
+Having AVG_Literacy > 90
+ORDER BY AVG_Literacy DESC;
+
+-- Top 3 sataes showing Avg Growth Rate --
+SELECT State
+, round( AVG (data1.Growth)*100, 2) AS 'Averg_Growth'
+From census_project.data1
+Group BY State
+ORDER BY  Averg_Growth DESC
+LIMIT 3;
+
+-- Bottom 3 States showing Avg Sex Ratio --
+SELECT State
+, ROUND(AVG (Sex_Ratio),0) AS Sex_Growth
+FROM census_project.data1
+GROUP BY State
+ORDER BY Sex_Growth ASC
+LIMIT 3 ;
+
+-- top and bottom 3 states in literacy --
+Drop table if exists Top3state;
+create temporary table Top3state 
+( State varchar (100)
+, Literacystate int);
+
+INSERT INTO Top3state
+SELECT State
+, ROUND(AVG(Literacy),2) AS AVG_Literacy
+FROM census_project.data1
+Group By State
+ORDER BY AVG_Literacy DESC
+LIMIT 3;
+
+Drop table if exists Bottom3state;
+create temporary table Bottom3state 
+( State varchar (100)
+, Literacystate int);
+
+INSERT INTO Bottom3state
+SELECT State
+, ROUND(AVG(Literacy),2) AS AVG_Literacy
+FROM census_project.data1
+Group By State
+ORDER BY AVG_Literacy ASC
+LIMIT 3; 
+
+Select * From Top3state
+UNION
+Select * From Bottom3state
+Order by Literacystate Desc;
+
+-- number of males and number of females from the propulation --
+SELECT C.District
+,C.State
+,ROUND(C.population /(C.Sex_Ratio+1),0) AS 'male'
+,Round((C.population*C.Sex_Ratio)/(C.Sex_Ratio+1),0) AS 'Female'
+From
+(SELECT B.District
+,B.State
+, Sex_Ratio/1000 AS 'Sex_Ratio'
+, B.Population AS 'population'
+From census_project.data1 AS A
+JOIN census_project.data2 AS B
+ON B.District = A.District) C;
+
+-- Total Male and Female per state -- 
+SELECT D.State
+,Sum(D.male)
+,Sum(D.Female)
+From
+(SELECT C.District
+,C.State
+,ROUND(C.population /(C.Sex_Ratio+1),0) AS 'male'
+,Round((C.population*C.Sex_Ratio)/(C.Sex_Ratio+1),0) AS 'Female'
+From
+(SELECT B.District
+,B.State
+, Sex_Ratio/1000 AS 'Sex_Ratio'
+, B.Population AS 'population'
+From census_project.data1 AS A
+JOIN census_project.data2 AS B
+ON B.District = A.District) C) D
+Group BY D.State;
+
+-- number of literate and illiterate Per State --
+SELECT D.State
+,SUM(D.Literate)
+,SUM(D.Illiterate)
+FROM (SELECT DIstinct C.District
+,C.State
+, ROUND((Literacy_Ratio * population),0) AS 'Literate'
+, ROUND((1- Literacy_Ratio)*population,0) AS 'Illiterate'
+FROM 
+(SELECT B.District
+,B.State
+, Literacy/100 AS 'Literacy_Ratio'
+, B.Population AS 'population'
+From census_project.data1 AS A
+JOIN census_project.data2 AS B
+ON B.District = A.District )C) D
+GROUP BY  D.State;
+
+-- Statewise Population in the previous census --
+SELECT C.State
+, SUM(C.Population) 'current population'
+, SUM(C.previ_pop) 'previous population'
+FROM (SELECT D1.District
+,D1.State
+, D2.Population
+, ROUND(Population/(1+Growth),0) AS 'previ_pop'
+FROM census_project.data1 D1
+INNER JOIN census_project.data2 D2
+ON D2.District = D1.District) C
+GROUP BY State;
+
+-- Population VS Area -- 
+SELECT y.Area/x.Total_current_population AS'Current Population VS Area'
+, y.Area/x.Total_previous_population AS 'Previous Population VS Area'
+FROM 
+(SELECT '1' AS'Keyyy' 
+, s.Total_current_population
+, s.Total_previous_population
+FROM (SELECT SUM(C.Population) 'Total_current_population'
+, SUM(C.previ_pop) 'Total_previous_population'
+FROM (SELECT D1.District
+,D1.State
+, D2.Population
+, Round(Population/(1+Growth),0) AS 'previ_pop'
+FROM census_project.data1 D1
+INNER JOIN census_project.data2 D2
+ON D2.District = D1.District) C) s) x
+INNER JOIN
+(SELECT '1' AS'Keyyy'
+,f.Area
+FROM (SELECT SUM(Area_km2) AS 'Area'
+FROM census_project.data2) f) y
+ON y.Keyyy =x.Keyyy;
+
+-- Top 3 litertae district per each state --
+SELECT  a.District
+, a.State
+,a.Literacy
+,a.Rnk
+FROM (SELECT District
+, State
+,Literacy
+,rank() Over (Partition By State Order By Literacy DESC) As 'Rnk'
+FROM census_project.data1 ) a
+WHERE a.Rnk in (1,2,3)
